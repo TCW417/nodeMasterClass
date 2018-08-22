@@ -5,13 +5,15 @@ const env = {};
 
 // staging/dev env (default)
 env.staging = {
-  PORT: 3000,
+  HTTP_PORT: 3000,
+  HTTPS_PORT: 3001,
   ENV_NAME: 'staging',
 };
 
 // production env
 env.production = {
-  PORT: 5000,
+  HTTP_PORT: 5000,
+  HTTPS_PORT: 5001,
   ENV_NAME: 'production',
 };
 

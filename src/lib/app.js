@@ -5,9 +5,16 @@ import http from 'http';
 import https from 'https';
 import url from 'url';
 import stringDecoder from 'string_decoder';
-import fs, { readFileSync } from 'fs';
+import fs from 'fs';
 
 import config from '../config';
+import _data from './data';
+
+// TESTING _DATA
+_data.read('test', 'newfile', (err, data) => {
+  if (err) return console.log('_data.create returned', err);
+  console.log('data', data);
+});
 
 const { StringDecoder } = stringDecoder;
 
@@ -79,7 +86,6 @@ const unifiedServer = (req, res) => {
 const httpServer = http.createServer(unifiedServer);
 
 // create https server
-console.log('app at directory', __dirname);
 const httpsServerOptions = {
   key: fs.readFileSync(`${__dirname}/https/key.pem`),
   cert: fs.readFileSync(`${__dirname}/https/cert.pem`),
