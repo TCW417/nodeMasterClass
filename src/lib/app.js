@@ -14,6 +14,9 @@ const server = http.createServer((req, res) => {
   // trim leading and trailing slashes
   const trimmedPath = path.replace(/^\/+|\/+$/g, '');
 
+  // get the query string
+  const { query } = parsedUrl;
+
   // get the http method requested
   const method = req.method.toUpperCase();
 
@@ -21,7 +24,7 @@ const server = http.createServer((req, res) => {
   res.end('Hello world!\n');
 
   // log request path
-  console.log(`${method} request received on path: ${trimmedPath}`);
+  console.log(`${method} request received on path: ${trimmedPath} with query ${JSON.stringify(query)}`);
 });
 
 const startServer = () => {
