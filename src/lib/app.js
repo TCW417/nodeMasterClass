@@ -20,11 +20,15 @@ const server = http.createServer((req, res) => {
   // get the http method requested
   const method = req.method.toUpperCase();
 
+  // get request headers as an object
+  const { headers } = req;
+
   // send the response
   res.end('Hello world!\n');
 
   // log request path
   console.log(`${method} request received on path: ${trimmedPath} with query ${JSON.stringify(query)}`);
+  console.log(`Request headers:\n${JSON.stringify(headers, null, 4)}`);
 });
 
 const startServer = () => {
