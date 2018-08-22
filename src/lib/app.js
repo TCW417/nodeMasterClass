@@ -2,8 +2,11 @@
 // this is the primary file for the api
 //
 import http from 'http';
+import https from 'https';
 import url from 'url';
 import stringDecoder from 'string_decoder';
+import fs, { readFileSync } from 'fs';
+
 import config from '../config';
 
 const { StringDecoder } = stringDecoder;
@@ -14,8 +17,7 @@ const handlers = {};
 // request router
 const router = {};
 
-
-const server = http.createServer((req, res) => {
+const unifiedServer = (req, res) => {
   // get the url and parse it including the query string
   const parsedUrl = url.parse(req.url, true);
   
@@ -71,11 +73,26 @@ const server = http.createServer((req, res) => {
   });
     
   console.log(`${method} request received on path: ${trimmedPath} with query ${JSON.stringify(query)}`);
-});
+};
+
+// create http server
+const httpServer = http.createServer(unifiedServer);
+
+// create https server
+console.log('app at directory', __dirname);
+const httpsServerOptions = {
+  key: fs.readFileSync(`${__dirname}/https/key.pem`),
+  cert: fs.readFileSync(`${__dirname}/https/cert.pem`),
+};
+
+const httpsServer = https.createServer(httpsServerOptions, unifiedServer);
 
 const startServer = () => {
-  server.listen(config.PORT, () => {
-    console.log(`The ${config.ENV_NAME} server is listening on port ${config.PORT}`);
+  httpServer.listen(config.HTTP_PORT, () => {
+    console.log(`The ${config.ENV_NAME} server is listening on port ${config.HTTP_PORT}`);
+  });
+  httpsServer.listen(config.HTTPS_PORT, () => {
+    console.log(`The ${config.ENV_NAME} server is listening on port ${config.HTTPS_PORT}`);
   });
 };
 
