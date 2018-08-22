@@ -98,12 +98,18 @@ const startServer = () => {
 
 export default startServer;
 
-// sample handler
-handlers.sample = (data, cb) => {
-  // call back with http status code and payload object
-  cb(406, { name: 'I am the sample hander.' });
+// ping handler
+handlers.ping = (data, cb) => {
+  // call back with http status code 200
+  cb(200);
 };
-router.sample = handlers.sample;
+router.ping = handlers.ping;
+
+// hello handler
+handlers.hello = (data, cb) => {
+  cb(200, 'Hello yourself! Thanks for visiting.');
+};
+router.hello = handlers.hello;
 
 // not found handler
 handlers.notFound = (data, cb) => {
