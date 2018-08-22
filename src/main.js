@@ -1,5 +1,6 @@
 'use strict';
 
-import { startServer } from './lib/app';
+import startServer from './lib/app';
 
 startServer();
+
