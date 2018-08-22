@@ -4,6 +4,7 @@
 import http from 'http';
 import url from 'url';
 import stringDecoder from 'string_decoder';
+import config from '../config';
 
 const { StringDecoder } = stringDecoder;
 
@@ -58,13 +59,14 @@ const server = http.createServer((req, res) => {
     // route the request to the chosen handler
     chosenHandler(data, (statusCode = 200, payload = {}) => {
       // convert payload object to sting
-      const payloadString = JSON.stringify(payload);
+      const jsonString = JSON.stringify(payload);
 
-      // return the resposne
+      // return the response
+      res.setHeader('Content-Type', 'application/json');
       res.writeHead(statusCode);
-      res.end(payloadString);
+      res.end(jsonString);
 
-      console.log(`Responding with status ${statusCode} and payload:\n${payloadString}`);
+      console.log(`Responding with status ${statusCode} and payload:\n${jsonString}`);
     });
   });
     
@@ -72,8 +74,8 @@ const server = http.createServer((req, res) => {
 });
 
 const startServer = () => {
-  server.listen(3000, () => {
-    console.log('The server is listening on port 3000');
+  server.listen(config.PORT, () => {
+    console.log(`The ${config.ENV_NAME} server is listening on port ${config.PORT}`);
   });
 };
 
