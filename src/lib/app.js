@@ -9,6 +9,7 @@ import fs from 'fs';
 
 import config from '../config';
 import userRoutes from '../routes/userRoutes';
+import tokenRoutes from '../routes/tokenRoutes';
 import miscRoutes from '../routes/miscRoutes';
 import helpers from './helpers';
 
@@ -18,6 +19,7 @@ const { StringDecoder } = stringDecoder;
 const router = {
   ping: miscRoutes.ping,
   users: userRoutes.users,
+  tokens: tokenRoutes.tokens,
 };
 
 const unifiedServer = (req, res) => {

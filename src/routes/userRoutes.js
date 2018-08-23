@@ -8,7 +8,7 @@ import helpers from '../lib/helpers';
 // request handlers
 const handlers = {};
 
-// hello handler
+// base handler
 handlers.users = (data, cb) => {
   const acceptableMethods = ['post', 'get', 'put', 'delete'];
 
@@ -26,7 +26,6 @@ handlers._users = {};
 // Optional data: none
 // users uniquely identified by their phone and password
 handlers._users.post = (data, cb) => {
-  console.log('handlers._users.post body', data.payload);
   // check that all require fields are filled out
   const firstName = typeof data.payload.firstName === 'string'
     && data.payload.firstName.trim().length > 0
@@ -42,7 +41,7 @@ handlers._users.post = (data, cb) => {
     ? data.payload.password.trim() : false;
   const tosAgreement = typeof data.payload.tosAgreement === 'boolean'
     && data.payload.tosAgreement;
-
+  
   if (!(firstName && lastName && phone && password && tosAgreement)) {
     return cb(400, { Error: 'Missing required fields' });
   }
@@ -80,7 +79,6 @@ handlers._users.post = (data, cb) => {
 // _users get
 // Required data: phone
 // Optional data: none
-// @TODO only let an authenticated user access their own object
 handlers._users.get = (data, cb) => {
   // check that the phone number provided is valid (from query)
   const phone = typeof data.query.phone === 'string'
@@ -89,13 +87,21 @@ handlers._users.get = (data, cb) => {
     : false;
   
   if (!phone) return cb(400, { Error: 'Missing required field' });
+  
+  // get the token from the header
+  const token = typeof data.headers.token === 'string' ? data.headers.token : false;
+  // verify that the token is valid for this phone number
+  helpers.verifyToken(token, phone, (tokenIsValid) => {
+    if (!tokenIsValid) return cb(403, { Error: 'Missing required token in header or token is invalid' });
 
-  _data.read('users', phone, (err, userData) => {
-    if (err) return cb(404, { Error: 'User not found' });
+    _data.read('users', phone, (err, userData) => {
+      if (err) return cb(404, { Error: 'User not found' });
 
-    // remove hashedPassword from user object
-    delete userData.hashedPassword;
-    return cb(200, userData);
+      // remove hashedPassword from user object
+      delete userData.hashedPassword;
+      return cb(200, userData);
+    });
+    return undefined;
   });
   return undefined;
 };
@@ -103,7 +109,6 @@ handlers._users.get = (data, cb) => {
 // _users put
 // Required data: phone
 // Optional data: fistName, lastName, password (at least one required)
-// @TODO only let authenticated user update their own object
 handlers._users.put = (data, cb) => {
   const phone = typeof data.payload.phone === 'string'
     && data.payload.phone.trim().length === 10 
@@ -125,22 +130,31 @@ handlers._users.put = (data, cb) => {
     return cb(400, { Error: 'Missing field(s) to update' });
   }
 
-  // lookup the user
-  _data.read('users', phone, (err, userData) => {
-    if (err) return cb(400, { Error: 'The specified user does not exist' });
+  // get the token from the header
+  const token = typeof data.headers.token === 'string' ? data.headers.token : false;
 
-    // update the necessary fields
-    if (firstName) userData.firstName = firstName;
-    if (lastName) userData.lastName = lastName;
-    if (password) userData.hashedPassword = helpers.hash(password);
+  // verify that the token is valid for this phone number
+  helpers.verifyToken(token, phone, (tokenIsValid) => {
+    if (!tokenIsValid) return cb(403, { Error: 'Missing required token in header or token is invalid' });
 
-    // store the new updates
-    _data.update('users', phone, userData, (uerr) => {
-      if (uerr) {
-        console.log(err);
-        return cb(500, { Error: 'Could not update the user' });
-      }
-      return cb(200);
+    // lookup the user
+    _data.read('users', phone, (err, userData) => {
+      if (err) return cb(400, { Error: 'The specified user does not exist' });
+
+      // update the necessary fields
+      if (firstName) userData.firstName = firstName;
+      if (lastName) userData.lastName = lastName;
+      if (password) userData.hashedPassword = helpers.hash(password);
+
+      // store the new updates
+      _data.update('users', phone, userData, (uerr) => {
+        if (uerr) {
+          console.log(err);
+          return cb(500, { Error: 'Could not update the user' });
+        }
+        return cb(200);
+      });
+      return undefined;
     });
     return undefined;
   });
@@ -150,7 +164,6 @@ handlers._users.put = (data, cb) => {
 // _users delete
 // Required data: phone
 // Optional data: none
-// @TODO only let an authenticated user delete their own object
 // @TODO clean up (delete) any other data associated with this user
 handlers._users.delete = (data, cb) => {
   const phone = typeof data.query.phone === 'string'
@@ -159,12 +172,21 @@ handlers._users.delete = (data, cb) => {
     : false;
   if (!phone) return cb(400, { Error: 'Missing required field' });
 
-  _data.read('users', phone, (rerr) => {
-    if (rerr) return cb(404, { Error: 'Specified user not found' });
+  // get the token from the header
+  const token = typeof data.headers.token === 'string' ? data.headers.token : false;
 
-    _data.delete('users', phone, (derr) => {
-      if (derr) return cb(404, { Error: 'User not found' });
-      return cb(200);
+  // verify that the token is valid for this phone number
+  helpers.verifyToken(token, phone, (tokenIsValid) => {
+    if (!tokenIsValid) return cb(403, { Error: 'Missing required token in header or token is invalid' });
+  
+    _data.read('users', phone, (rerr) => {
+      if (rerr) return cb(404, { Error: 'Specified user not found' });
+
+      _data.delete('users', phone, (derr) => {
+        if (derr) return cb(404, { Error: 'User not found' });
+        return cb(200);
+      });
+      return undefined;
     });
     return undefined;
   });
