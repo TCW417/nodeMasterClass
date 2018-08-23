@@ -8,21 +8,17 @@ import stringDecoder from 'string_decoder';
 import fs from 'fs';
 
 import config from '../config';
-import _data from './data';
-
-// TESTING _DATA
-_data.read('test', 'newfile', (err, data) => {
-  if (err) return console.log('_data.create returned', err);
-  console.log('data', data);
-});
+import userRoutes from '../routes/userRoutes';
+import miscRoutes from '../routes/miscRoutes';
+import helpers from './helpers';
 
 const { StringDecoder } = stringDecoder;
 
-// request handlers
-const handlers = {};
-
 // request router
-const router = {};
+const router = {
+  ping: miscRoutes.ping,
+  users: userRoutes.users,
+};
 
 const unifiedServer = (req, res) => {
   // get the url and parse it including the query string
@@ -38,7 +34,7 @@ const unifiedServer = (req, res) => {
   const { query } = parsedUrl;
   
   // get the http method requested
-  const method = req.method.toUpperCase();
+  const method = req.method.toLowerCase();
   
   // get request headers as an object
   const { headers } = req;
@@ -62,7 +58,7 @@ const unifiedServer = (req, res) => {
       query,
       method,
       headers,
-      payload: buffer,
+      payload: helpers.jsonParse(buffer),
     };
 
     // route the request to the chosen handler
@@ -103,21 +99,3 @@ const startServer = () => {
 };
 
 export default startServer;
-
-// ping handler
-handlers.ping = (data, cb) => {
-  // call back with http status code 200
-  cb(200);
-};
-router.ping = handlers.ping;
-
-// hello handler
-handlers.hello = (data, cb) => {
-  cb(200, 'Hello yourself! Thanks for visiting.');
-};
-router.hello = handlers.hello;
-
-// not found handler
-handlers.notFound = (data, cb) => {
-  cb(404);
-};

@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import helpers from './helpers';
 
 // module container
 const lib = {};
@@ -26,7 +27,7 @@ lib.create = (dir, file, data, cb) => {
 
       return fs.close(fd, (cerr) => {
         if (cerr) cb(`Error closing new file: ${cerr}`);
-        
+
         return cb(false); 
       });       
     });    
@@ -36,7 +37,8 @@ lib.create = (dir, file, data, cb) => {
 // read data from a file
 lib.read = (dir, file, cb) => {
   return fs.readFile(`${lib.baseDir}/${dir}/${file}.json`, 'utf8', (err, data) => {
-    return cb(err, data);
+    if (!err && data) return cb(null, helpers.jsonParse(data));
+    return cb(err, null);
   });
 };
 
