@@ -2,8 +2,8 @@
 // These are the request handlers
 //
 
-import _data from '../lib/data';
-import helpers from '../lib/helpers';
+import _data from './lib/data';
+import helpers from './lib/helpers';
 
 // request handlers
 const handlers = {};
