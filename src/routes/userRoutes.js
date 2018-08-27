@@ -164,7 +164,6 @@ handlers._users.put = (data, cb) => {
 // _users delete
 // Required data: phone
 // Optional data: none
-// @TODO clean up (delete) any other data associated with this user
 handlers._users.delete = (data, cb) => {
   const phone = typeof data.query.phone === 'string'
     && data.query.phone.trim().length === 10 
@@ -179,12 +178,36 @@ handlers._users.delete = (data, cb) => {
   helpers.verifyToken(token, phone, (tokenIsValid) => {
     if (!tokenIsValid) return cb(403, { Error: 'Missing required token in header or token is invalid' });
   
-    _data.read('users', phone, (rerr) => {
+    _data.read('users', phone, (rerr, userData) => {
       if (rerr) return cb(404, { Error: 'Specified user not found' });
 
       _data.delete('users', phone, (derr) => {
         if (derr) return cb(404, { Error: 'User not found' });
-        return cb(200);
+        
+        // now delete each of the checks associated with the user
+        // determine which checks the user already has
+        const userChecks = typeof userData.checks === 'object'
+          && userData.checks instanceof Array
+          ? userData.checks : [];
+        const checksToDelete = userChecks.length;
+        if (checksToDelete === 0) return cb(200);
+
+        // checks to delete...
+        let checksDeleted = 0;
+        let deletionErrors = false;
+        userChecks.forEach((checkId) => {
+          _data.delete('checks', checkId, (err) => {
+            if (err) deletionErrors = true;
+            checksDeleted += 1;
+            if (checksDeleted === checksToDelete) {
+              if (!deletionErrors) return cb(200);
+              return cb(500, { Error: 'Errors encountered while deleting user\'s checks. Some checks may not have been deleted.' });
+            }
+            return undefined; 
+          });
+          return undefined;
+        });
+        return undefined;
       });
       return undefined;
     });

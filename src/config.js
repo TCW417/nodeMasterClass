@@ -9,6 +9,7 @@ env.staging = {
   HTTPS_PORT: 3001,
   ENV_NAME: 'staging',
   HASH_SECRET: 'ThisIsTheHashSecret',
+  MAX_CHECKS: 5,
 };
 
 // production env
@@ -17,6 +18,7 @@ env.production = {
   HTTPS_PORT: 5001,
   ENV_NAME: 'production',
   HASH_SECRET: 'ThisIsTheHashSecret',
+  MAX_CHECKS: 5,
 };
 
 // determine which env vars to export
