@@ -236,6 +236,11 @@ handlers._checks.delete = (data, cb) => {
         _data.read('users', checkData.userPhone, (ruerr, userData) => {
           if (ruerr) return cb(500, { Error: 'Could not find user who created the check' });
 
+          // determine which checks the user already has
+          const userChecks = typeof userData.checks === 'object'
+            && userData.checks instanceof Array
+            ? userData.checks : [];
+            
           const updatedChecks = userData.checks.filter(c => c !== id);
 
           userData.checks = updatedChecks;
