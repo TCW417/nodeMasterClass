@@ -8,6 +8,7 @@ import url from 'url';
 
 import twilio from './twilio';
 import _data from './data';
+import _logs from './logs';
 
 const workers = {};
 
@@ -93,10 +94,15 @@ workers.processCheckOutcome = (checkData, outcome) => {
   // decide if an alert is warranted
   const alertWarranted = checkData.lastChecked && checkData.state !== state;
 
+  // log the outcome of the check
+  const timeOfCheck = Date.now();
+  workers.log(checkData, outcome, state, alertWarranted, timeOfCheck);
+
   // update the check data in storage
   const newCheckData = Object.assign({}, checkData);
   newCheckData.state = state;
-  newCheckData.lastChecked = Date.now();
+  newCheckData.lastChecked = timeOfCheck;
+
 
   // save the updates
   _data.update('checks', newCheckData.id, newCheckData, (err) => {
@@ -174,6 +180,61 @@ workers.gatherAllChecks = () => {
   });
 };
 
+workers.log = (checkData, outcome, state, alertWarranted, timeOfCheck) => {
+  // create logData object
+  const logData = {
+    check: checkData,
+    outcome,
+    state,
+    alert: alertWarranted,
+    time: timeOfCheck,
+  };
+
+  // convert data to JSON string
+  const logString = JSON.stringify(logData);
+
+  // determine the name of the log file
+  const logFileName = checkData.id;
+
+  // append the log string to the file
+  _logs.append(logFileName, logString, (err) => {
+    if (err) return console.log('logging to file failed');
+    return console.log('logging to file succeeded');
+  });
+};
+
+// rotate (compress) existing log files
+workers.rotateLogs = () => {
+  // list all the non-compressed log files in .logs
+  _logs.list(false, (err, logs) => {
+    if (err || (logs && logs.length === 0)) return console.log('Error: Could not find any logs to rotate');
+
+    logs.forEach((log) => {
+      // compress the data to a different file
+      const logId = log.replace('.log', ''); // strip extension
+      const newZipName = `${logId}-${Date.now()}`;
+      _logs.compress(logId, newZipName, (cmperr) => {
+        if (cmperr) return console.log(`Error compressing log file: ${cmperr}`);
+
+        // truncate the log
+        _logs.truncate(logId, (terr) => {
+          if (terr) return console.log(`Error truncating log file: ${terr}`);
+          return console.log('Success truncating log file');
+        });
+        return undefined;
+      });
+    });
+    return undefined;
+  });
+};
+
+// timer to execute log rotation once/day
+workers.logRotationLoop = () => {
+  setInterval(() => {
+    workers.rotateLogs();
+  }, 1000 * 60 * 60 * 24);
+};
+
 // Timer to execute the worker processes once per minute
 workers.loop = () => {
   setInterval(() => {
@@ -186,6 +247,12 @@ const startWorkers = () => {
   workers.gatherAllChecks();
   // call the loop so the checks continue to be executed
   workers.loop();
+
+  // compress all the logs right now
+  workers.rotateLogs();
+
+  // call the compression loop so logs will be compressed once/day
+  workers.logRotationLoop();
 };
 
 export default startWorkers;
