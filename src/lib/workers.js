@@ -24,12 +24,13 @@ workers.performCheck = (validCheck) => {
 
   // parse hostname and path out of validCheck data
   const parsedUrl = url.parse(`${validCheck.protocol}://${validCheck.url}`, true);
-  const { hostname, path } = parsedUrl;
+  const { hostname, path, port } = parsedUrl;
 
   // construct the request
   const requestDetails = {
     protocol: `${validCheck.protocol}:`,
     hostname,
+    port,
     method: validCheck.method.toUpperCase(),
     path,
     timout: validCheck.timeoutSeconds * 1000, // convert secs to msecs
@@ -42,7 +43,8 @@ workers.performCheck = (validCheck) => {
     const status = res.statusCode;
 
     // update the checkOutcome and pass the data along
-    validCheck.responseCode = status;
+    checkOutcome.responseCode = status;
+
     if (!outcomeSent) {
       workers.processCheckOutcome(validCheck, checkOutcome);
       outcomeSent = true;
@@ -85,7 +87,7 @@ workers.performCheck = (validCheck) => {
 // alert on that.
 workers.processCheckOutcome = (checkData, outcome) => {
   // decide if the check is up or down in its current state
-  const state = !outcome.error && outcome.responseCode && checkData.successCode.includes(outcome.responseCode)
+  const state = !outcome.error && outcome.responseCode && checkData.successCodes.includes(outcome.responseCode)
     ? 'up' : 'down';
   
   // decide if an alert is warranted
@@ -99,7 +101,6 @@ workers.processCheckOutcome = (checkData, outcome) => {
   // save the updates
   _data.update('checks', newCheckData.id, newCheckData, (err) => {
     if (err) return console.log('Error trying to save on eof the checks');
-
     if (!alertWarranted) return console.log('Check outcome unchanged. No alert sent');
     return workers.alertUserToStatusChange(newCheckData);
   });
@@ -130,8 +131,8 @@ workers.validateCheckData = (orgCheckData) => {
     ? originalCheckData.url.trim() : false;
   originalCheckData.method = typeof originalCheckData.method === 'string' && ['post', 'get', 'put', 'delete'].includes(originalCheckData.method)
     ? originalCheckData.method : false;
-  originalCheckData.successCode = typeof originalCheckData.successCode === 'object' && originalCheckData.successCode instanceof Array && originalCheckData.successCode.length > 0
-    ? originalCheckData.successCode : false;
+  originalCheckData.successCodes = typeof originalCheckData.successCodes === 'object' && originalCheckData.successCodes instanceof Array && originalCheckData.successCodes.length > 0
+    ? originalCheckData.successCodes : false;
   originalCheckData.timeoutSeconds = typeof originalCheckData.timeoutSeconds === 'number'
     && originalCheckData.timeoutSeconds % 1 === 0
     && originalCheckData.timeoutSeconds >= 1
@@ -142,7 +143,7 @@ workers.validateCheckData = (orgCheckData) => {
   // this check, namely state (up or down) and lastChecked timestamp
   originalCheckData.state = typeof originalCheckData.state === 'string' && ['up', 'down'].includes(originalCheckData.state)
     ? originalCheckData.state : 'down';
-  originalCheckData.lastChecked = originalCheckData.lastChecked === 'number'
+  originalCheckData.lastChecked = typeof originalCheckData.lastChecked === 'number'
     && originalCheckData.lastChecked > 0
     ? originalCheckData.lastChecked : false;
   
@@ -151,7 +152,7 @@ workers.validateCheckData = (orgCheckData) => {
     && originalCheckData.userPhone
     && originalCheckData.protocol
     && originalCheckData.method
-    && originalCheckData.successCode
+    && originalCheckData.successCodes
     && originalCheckData.timeoutSeconds)) return console.log('Error: One or more of the check data items fails validation');
      
   return workers.performCheck(originalCheckData);
@@ -166,8 +167,6 @@ workers.gatherAllChecks = () => {
     checks.forEach((check) => {
       _data.read('checks', check, (rerr, originalCheckData) => {
         if (rerr || !originalCheckData) console.log('Error reading one of the checks data files or file is malformed');
-
-        // pass check to check validator
         workers.validateCheckData(originalCheckData);
       });
     });
@@ -179,7 +178,7 @@ workers.gatherAllChecks = () => {
 workers.loop = () => {
   setInterval(() => {
     workers.gatherAllChecks();
-  }, 1000 * 5);
+  }, 1000 * 60);
 };
 
 const startWorkers = () => {
