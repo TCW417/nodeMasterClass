@@ -54,7 +54,7 @@ const unifiedServer = (req, res) => {
 
     // choose the handler for this request. if one isn't
     // found use the notFound handler
-    const chosenHandler = router[trimmedPath] ? router[trimmedPath] : handlers.notFound;
+    const chosenHandler = router[trimmedPath] ? router[trimmedPath] : miscRoutes.notFound;
     
     // construct the data object to pass to the handler
     const data = {
