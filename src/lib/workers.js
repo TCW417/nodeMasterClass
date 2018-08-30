@@ -8,6 +8,7 @@ import url from 'url';
 
 import twilio from './twilio';
 import _data from './data';
+import _logs from './logs';
 
 const workers = {};
 
@@ -24,12 +25,13 @@ workers.performCheck = (validCheck) => {
 
   // parse hostname and path out of validCheck data
   const parsedUrl = url.parse(`${validCheck.protocol}://${validCheck.url}`, true);
-  const { hostname, path } = parsedUrl;
+  const { hostname, path, port } = parsedUrl;
 
   // construct the request
   const requestDetails = {
     protocol: `${validCheck.protocol}:`,
     hostname,
+    port,
     method: validCheck.method.toUpperCase(),
     path,
     timout: validCheck.timeoutSeconds * 1000, // convert secs to msecs
@@ -42,7 +44,8 @@ workers.performCheck = (validCheck) => {
     const status = res.statusCode;
 
     // update the checkOutcome and pass the data along
-    validCheck.responseCode = status;
+    checkOutcome.responseCode = status;
+
     if (!outcomeSent) {
       workers.processCheckOutcome(validCheck, checkOutcome);
       outcomeSent = true;
@@ -85,21 +88,25 @@ workers.performCheck = (validCheck) => {
 // alert on that.
 workers.processCheckOutcome = (checkData, outcome) => {
   // decide if the check is up or down in its current state
-  const state = !outcome.error && outcome.responseCode && checkData.successCode.includes(outcome.responseCode)
+  const state = !outcome.error && outcome.responseCode && checkData.successCodes.includes(outcome.responseCode)
     ? 'up' : 'down';
   
   // decide if an alert is warranted
   const alertWarranted = checkData.lastChecked && checkData.state !== state;
 
+  // log the outcome of the check
+  const timeOfCheck = Date.now();
+  workers.log(checkData, outcome, state, alertWarranted, timeOfCheck);
+
   // update the check data in storage
   const newCheckData = Object.assign({}, checkData);
   newCheckData.state = state;
-  newCheckData.lastChecked = Date.now();
+  newCheckData.lastChecked = timeOfCheck;
+
 
   // save the updates
   _data.update('checks', newCheckData.id, newCheckData, (err) => {
     if (err) return console.log('Error trying to save on eof the checks');
-
     if (!alertWarranted) return console.log('Check outcome unchanged. No alert sent');
     return workers.alertUserToStatusChange(newCheckData);
   });
@@ -130,8 +137,8 @@ workers.validateCheckData = (orgCheckData) => {
     ? originalCheckData.url.trim() : false;
   originalCheckData.method = typeof originalCheckData.method === 'string' && ['post', 'get', 'put', 'delete'].includes(originalCheckData.method)
     ? originalCheckData.method : false;
-  originalCheckData.successCode = typeof originalCheckData.successCode === 'object' && originalCheckData.successCode instanceof Array && originalCheckData.successCode.length > 0
-    ? originalCheckData.successCode : false;
+  originalCheckData.successCodes = typeof originalCheckData.successCodes === 'object' && originalCheckData.successCodes instanceof Array && originalCheckData.successCodes.length > 0
+    ? originalCheckData.successCodes : false;
   originalCheckData.timeoutSeconds = typeof originalCheckData.timeoutSeconds === 'number'
     && originalCheckData.timeoutSeconds % 1 === 0
     && originalCheckData.timeoutSeconds >= 1
@@ -142,7 +149,7 @@ workers.validateCheckData = (orgCheckData) => {
   // this check, namely state (up or down) and lastChecked timestamp
   originalCheckData.state = typeof originalCheckData.state === 'string' && ['up', 'down'].includes(originalCheckData.state)
     ? originalCheckData.state : 'down';
-  originalCheckData.lastChecked = originalCheckData.lastChecked === 'number'
+  originalCheckData.lastChecked = typeof originalCheckData.lastChecked === 'number'
     && originalCheckData.lastChecked > 0
     ? originalCheckData.lastChecked : false;
   
@@ -151,7 +158,7 @@ workers.validateCheckData = (orgCheckData) => {
     && originalCheckData.userPhone
     && originalCheckData.protocol
     && originalCheckData.method
-    && originalCheckData.successCode
+    && originalCheckData.successCodes
     && originalCheckData.timeoutSeconds)) return console.log('Error: One or more of the check data items fails validation');
      
   return workers.performCheck(originalCheckData);
@@ -166,8 +173,6 @@ workers.gatherAllChecks = () => {
     checks.forEach((check) => {
       _data.read('checks', check, (rerr, originalCheckData) => {
         if (rerr || !originalCheckData) console.log('Error reading one of the checks data files or file is malformed');
-
-        // pass check to check validator
         workers.validateCheckData(originalCheckData);
       });
     });
@@ -175,11 +180,66 @@ workers.gatherAllChecks = () => {
   });
 };
 
+workers.log = (checkData, outcome, state, alertWarranted, timeOfCheck) => {
+  // create logData object
+  const logData = {
+    check: checkData,
+    outcome,
+    state,
+    alert: alertWarranted,
+    time: timeOfCheck,
+  };
+
+  // convert data to JSON string
+  const logString = JSON.stringify(logData);
+
+  // determine the name of the log file
+  const logFileName = checkData.id;
+
+  // append the log string to the file
+  _logs.append(logFileName, logString, (err) => {
+    if (err) return console.log('logging to file failed');
+    return console.log('logging to file succeeded');
+  });
+};
+
+// rotate (compress) existing log files
+workers.rotateLogs = () => {
+  // list all the non-compressed log files in .logs
+  _logs.list(false, (err, logs) => {
+    if (err || (logs && logs.length === 0)) return console.log('Error: Could not find any logs to rotate');
+
+    logs.forEach((log) => {
+      // compress the data to a different file
+      const logId = log.replace('.log', ''); // strip extension
+      const newZipName = `${logId}-${Date.now()}`;
+      _logs.compress(logId, newZipName, (cmperr) => {
+        if (cmperr) return console.log(`Error compressing log file: ${cmperr}`);
+
+        // truncate the log
+        _logs.truncate(logId, (terr) => {
+          if (terr) return console.log(`Error truncating log file: ${terr}`);
+          return console.log('Success truncating log file');
+        });
+        return undefined;
+      });
+    });
+    return undefined;
+  });
+};
+
+// timer to execute log rotation once/day
+workers.logRotationLoop = () => {
+  setInterval(() => {
+    workers.rotateLogs();
+  }, 1000 * 60 * 60 * 24);
+};
+
 // Timer to execute the worker processes once per minute
 workers.loop = () => {
   setInterval(() => {
     workers.gatherAllChecks();
-  }, 1000 * 5);
+  }, 1000 * 60);
 };
 
 const startWorkers = () => {
@@ -187,6 +247,12 @@ const startWorkers = () => {
   workers.gatherAllChecks();
   // call the loop so the checks continue to be executed
   workers.loop();
+
+  // compress all the logs right now
+  workers.rotateLogs();
+
+  // call the compression loop so logs will be compressed once/day
+  workers.logRotationLoop();
 };
 
 export default startWorkers;
